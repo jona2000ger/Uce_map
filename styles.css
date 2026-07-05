@@ -422,6 +422,13 @@ input[type="checkbox"] {
 	cursor: pointer;
 }
 
+.app-footer {
+	padding: 10px 16px 18px;
+	text-align: center;
+	font-size: 0.82rem;
+	color: var(--text-muted);
+}
+
 @media (max-width: 1200px) {
 	.topbar-inner {
 		flex-direction: column;

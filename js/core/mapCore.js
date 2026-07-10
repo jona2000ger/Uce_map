@@ -27,17 +27,28 @@ export function initMapBase(state, onToggleVisibility) {
   document.getElementById('toggle-metro')?.addEventListener('change', onToggleVisibility);
   document.getElementById('toggle-ecovia')?.addEventListener('change', onToggleVisibility);
 
+  // DIBUJO INICIAL DE NODOS:
+  // Aquí se pintan en el mapa todos los nodos existentes en memoria
+  // (nodos base o restaurados desde localStorage/hash).
   state.nodes.forEach((node) => addNodeMarker(state, node));
   state.edges.forEach((edge) => drawEdge(state, edge));
 }
 
 export function addNodeMarker(state, node) {
+  // CÁLCULO VISUAL DEL NODO:
+  // Se clasifica como crítico si score > 8.8 para cambiar su color.
+  // Este cálculo NO altera rutas; solo define estilo del marcador.
   const isCritical = node.score > 8.8;
+  const markerLabel = node.role === 'origin'
+    ? 'Inicio'
+    : node.role === 'destination'
+      ? 'Final'
+      : node.id;
   const marker = new google.maps.Marker({
     position: node.coords,
     map: state.map,
     draggable: true,
-    label: { text: node.id, color: 'white', fontWeight: 'bold', fontSize: '12px' },
+    label: { text: markerLabel, color: 'white', fontWeight: 'bold', fontSize: '12px' },
     icon: {
       path: google.maps.SymbolPath.CIRCLE,
       scale: 14,
@@ -84,6 +95,9 @@ export function drawEdge(state, edge) {
 }
 
 export function refreshMap(state) {
+  // REDIBUJO DE ARISTAS:
+  // Cuando un nodo cambia de posición (drag), se eliminan y dibujan de nuevo
+  // las líneas para que conecten con las nuevas coordenadas del nodo.
   state.edgePolylines.forEach(({ polyline }) => polyline.setMap(null));
   state.edgePolylines.length = 0;
   state.edges.forEach((edge) => drawEdge(state, edge));
@@ -169,6 +183,7 @@ export function getGraphState(state) {
       id: node.id,
       name: node.name,
       coords: node.coords,
+      role: node.role || null,
       score: node.score,
       description: node.description,
     })),
@@ -206,6 +221,7 @@ export function applySavedState(state, saved) {
       const node = findNode(state, savedNode.id);
       if (node) {
         node.coords = normalizedCoords;
+        node.role = savedNode.role || node.role || null;
         if (savedNode.name) node.name = savedNode.name;
         if (typeof savedNode.score === 'number') node.score = savedNode.score;
         if (savedNode.description) node.description = savedNode.description;
@@ -214,6 +230,7 @@ export function applySavedState(state, saved) {
           id: savedNode.id,
           name: savedNode.name || savedNode.id,
           coords: normalizedCoords,
+          role: savedNode.role || null,
           score: typeof savedNode.score === 'number' ? savedNode.score : 5,
           description: savedNode.description || 'Nodo restaurado desde almacenamiento.',
         });

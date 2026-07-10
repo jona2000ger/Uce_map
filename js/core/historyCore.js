@@ -105,6 +105,9 @@ function ensureSearchMarkersForEntry(state, searchEntry) {
       position: marker.position,
       map: null,
       title: marker.title || `${searchEntry.origin} / ${searchEntry.destination}`,
+      label: marker.label
+        ? { text: marker.label, color: 'white', fontWeight: 'bold', fontSize: '12px' }
+        : undefined,
       icon: {
         path: google.maps.SymbolPath.CIRCLE,
         scale: 14,
@@ -340,10 +343,16 @@ export function saveSearchToHistory(state, transitFns, searchId, origin, destina
       .map((node) => {
         const position = normalizeCoords(node?.coords);
         if (!position) return null;
+        const label = node.role === 'origin'
+          ? 'Inicio'
+          : node.role === 'destination'
+            ? 'Final'
+            : node.id;
         return {
           position,
           title: node.name,
           color: markerColor,
+          label,
         };
       })
       .filter(Boolean)

@@ -1,0 +1,96 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Calibri;}}
+\fs24
+\b F\'d3RMULAS MATEM\'c1TICAS DEL PROYECTO Y SU TRADUCCI\'d3N A C\'d3DIGO\b0\par
+Quito Transit Analytics\par
+\par
+\b 1) FUNCI\'d3N DE COSTO POR RUTA\b0\par
+F\'f3rmula:\par
+f(r_i) = T_i = duration.value(r_i)\par
+\par
+Qu\'e9 significa cada s\'edmbolo:\par
+- f: funci\'f3n objetivo (costo que se compara entre rutas).\par
+- r_i: ruta candidata n\'famero i.\par
+- i: \’ndice de ruta (i = 1, 2, ..., n).\par
+- T_i: tiempo total de la ruta r_i (en segundos).\par
+- duration.value(r_i): tiempo que devuelve Google Directions API para la ruta.\par
+\par
+Idea matem\'e1tica:\par
+A cada ruta se le asigna un costo temporal. Menor costo = mejor ruta.\par
+\par
+C\'f3mo se transform\'f3 a c\'f3digo:\par
+- Archivo: js/app.js\par
+- Funci\'f3n principal: calculateAndDrawRealRoute(...)\par
+- Se consultan varias opciones de ruta y se filtran las v\'e1lidas.\par
+- En cada resultado se usa leg.duration.value para comparar tiempos.\par
+- Implementaci\'f3n clave: rutasValidas.sort((a, b) => a.leg.duration.value - b.leg.duration.value)\par
+\par
+\b 2) SELECCI\'d3N DE LA RUTA \’PTIMA\b0\par
+F\'f3rmula:\par
+r* = argmin_{r_i ∈ R} f(r_i)\par
+\par
+Qu\'e9 significa cada s\'edmbolo:\par
+- r*: ruta \’ptima seleccionada.\par
+- arg min: operador que devuelve el elemento que minimiza una funci\'f3n.\par
+- R: conjunto de rutas candidatas.\par
+- r_i \u8712? R: cada ruta posible dentro del conjunto.\par
+- f(r_i): costo de la ruta i (en este proyecto, tiempo total).\par
+\par
+C\'f3mo se transform\'f3 a c\'f3digo:\par
+- Primero se ordena la lista por tiempo (ascendente).\par
+- Luego se toma el primer elemento: mejorOpcion = rutasValidas[0].\par
+\par
+\b 3) TIEMPO TOTAL COMO SUMA DE TRAMOS\b0\par
+F\'f3rmula:\par
+T_i = Σ_{k=1}^{m_i} t_{ik}\par
+\par
+Qu\'e9 significa cada s\'edmbolo:\par
+- T_i: tiempo total de la ruta i.\par
+- \u8721?: sumatoria.\par
+- k: \’ndice del tramo dentro de la ruta.\par
+- m_i: cantidad de tramos de la ruta i.\par
+- t_{ik}: tiempo del tramo k en la ruta i.\par
+\par
+C\'f3mo se transform\'f3 a c\'f3digo:\par
+- Directions API ya devuelve el tiempo total consolidado en leg.duration.value.\par
+- El proyecto usa ese valor directamente para comparar, sin recalcular manualmente la suma.\par
+\par
+\b 4) REPRESENTACI\'d3N DE NODOS (PUNTOS GEOGR\'c1FICOS)\b0\par
+F\'f3rmula:\par
+p = (φ, λ)\par
+\par
+Qu\'e9 significa cada s\'edmbolo:\par
+- p: punto o nodo en el mapa.\par
+- \u966? (phi): latitud.\par
+- \u955? (lambda): longitud.\par
+\par
+Para origen y destino:\par
+p_o = (φ_o, λ_o)\par
+p_d = (φ_d, λ_d)\par
+\par
+C\'f3mo se transform\'f3 a c\'f3digo:\par
+- Coordenadas desde Google Places: place.geometry.location\par
+- Coordenadas desde GPS: navigator.geolocation\par
+- Creaci\'f3n de nodos con coords: { lat, lng }\par
+- Dibujo con addNodeMarker(...) y new google.maps.Marker(...)\par
+\par
+\b 5) MODELO DE GRAFO EN EL PROYECTO\b0\par
+- Nodo: punto geogr\'e1fico.\par
+- Arista: conexi\'f3n entre dos nodos.\par
+- Peso de arista: tiempo estimado de viaje.\par
+\par
+En c\'f3digo:\par
+- state.nodes: conjunto de nodos\par
+- state.edges: conjunto de aristas\par
+- drawEdge(...): dibuja la arista\par
+- refreshMap(...): redibuja conexiones si cambia un nodo\par
+\par
+\b 6) RESUMEN PARA EXPOSICI\'d3N\b0\par
+1. Se obtienen rutas candidatas con Google Directions API.\par
+2. Se usa duration.value como costo por ruta.\par
+3. Se elige la de menor tiempo (arg min).\par
+4. Se crean nodos con coordenadas (lat, lng).\par
+5. Se dibujan nodos y conexiones en el mapa.\par
+\par
+Con esto, la parte matem\'e1tica (funci\'f3n objetivo y minimizaci\'f3n) queda conectada con la implementaci\'f3n en JavaScript.\par
+}

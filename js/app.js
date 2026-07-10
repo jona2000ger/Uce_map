@@ -8,6 +8,7 @@ import {
 } from './core/mapCore.js';
 import {
   clearDrawnTransitLines,
+  detectOverlappingTransitSegments,
   drawTransitLinesFromResults,
   fetchTransitOption,
   getModeName,
@@ -87,13 +88,14 @@ function updateRecommendationFromHistoryEntry(searchEntry) {
   document.getElementById('best-route').textContent = data.bestRoute;
   document.getElementById('best-lines').textContent = data.bestLines;
   document.getElementById('search-count').textContent = `Búsquedas realizadas: ${state.searchHistory.length}`;
-  document.getElementById('search-status').textContent = `Última búsqueda: ${searchEntry.timestamp}`;
+  const overlapSuffix = data.overlapNotice ? ` · ${data.overlapNotice}` : '';
+  document.getElementById('search-status').textContent = `Última búsqueda: ${searchEntry.timestamp}${overlapSuffix}`;
   if (data.detailHtml) {
     document.getElementById('node-info').innerHTML = data.detailHtml;
   }
 }
 
-function updateRecommendationPanel(mejorOpcion, legInfo, origen, destino) {
+function updateRecommendationPanel(mejorOpcion, legInfo, origen, destino, overlapInfo = null) {
   const transportName = getModeName(mejorOpcion.mode);
   const tiempo = legInfo.duration.text;
   const distancia = legInfo.distance.text;
@@ -117,14 +119,22 @@ function updateRecommendationPanel(mejorOpcion, legInfo, origen, destino) {
   document.getElementById('best-lines').textContent = recommendedLines;
 
   document.getElementById('search-count').textContent = `Búsquedas realizadas: ${state.searchHistory.length}`;
-  document.getElementById('search-status').textContent = `Última búsqueda: ${new Date().toLocaleTimeString('es-ES')}`;
+  const overlapSuffix = overlapInfo?.hasOverlap
+    ? ` · ⚠ Líneas superpuestas: ${overlapInfo.overlapSegmentCount}`
+    : '';
+  document.getElementById('search-status').textContent = `Última búsqueda: ${new Date().toLocaleTimeString('es-ES')}${overlapSuffix}`;
 }
 
-function buildDetailedResultHtml(origenNombre, destinoNombre, mejorOpcion, rutasValidas) {
+function buildDetailedResultHtml(origenNombre, destinoNombre, mejorOpcion, rutasValidas, overlapInfo = null) {
   let info = `<strong>${origenNombre} → ${destinoNombre}</strong><br><br>`;
   info += `<div style="padding: 10px; background: #004d26; border: 1px solid #00ff99; border-radius: 8px; margin-bottom: 12px;">`;
   info += `<b>Mejor opción:</b><br><span style="color: #00ff99; font-size: 1.1em; font-weight: bold;">${getModeName(mejorOpcion.mode)} (${mejorOpcion.leg.duration.text})</span>`;
   info += `</div>`;
+  if (overlapInfo?.hasOverlap) {
+    info += `<div style="padding: 10px; background: #3a2800; border: 1px solid #ffcc00; border-radius: 8px; margin-bottom: 12px;">`;
+    info += `<b>⚠ Líneas superpuestas detectadas:</b> ${overlapInfo.overlapSegmentCount} tramos (máx. ${overlapInfo.maxOverlap} coincidencias en un tramo).`;
+    info += `</div>`;
+  }
   info += `<div style="font-size:0.85em; color:#ccc; margin-bottom:10px;">`;
   info += `Color en mapa: <span style="color:#00cc66"><b>Verde</b></span> (más rápida) · <span style="color:#ffcc00"><b>Amarillo</b></span> (intermedia) · <span style="color:#ff4d4d"><b>Rojo</b></span> (más lenta)`;
   info += `</div>`;
@@ -199,13 +209,20 @@ async function calculateAndDrawRealRoute(originLatLng, destLatLng, originName, d
   const mejorOpcion = rutasValidas[0];
   const searchId = Date.now().toString();
 
+  // CÁLCULO DE IDENTIFICADORES DE NODOS DINÁMICOS:
+  // En cada búsqueda se generan dos IDs (origen/destino) para modelar
+  // el trayecto como nodos dentro del grafo visual.
   const oId = `N${Math.floor(Math.random() * 1000)}`;
   const dId = `N${Math.floor(Math.random() * 1000)}`;
 
+  // CÁLCULO DE DATOS DE NODOS:
+  // Se construye un objeto por nodo con: id, nombre, coordenadas, score
+  // y descripción. El score=5 es un valor base para nodos creados por búsqueda.
   const nuevoOrigen = {
     id: oId,
     name: originName.split(',')[0],
     coords: originLatLng,
+    role: 'origin',
     score: 5,
     description: 'Punto real creado dinámicamente.',
   };
@@ -214,10 +231,14 @@ async function calculateAndDrawRealRoute(originLatLng, destLatLng, originName, d
     id: dId,
     name: destName.split(',')[0],
     coords: destLatLng,
+    role: 'destination',
     score: 5,
     description: 'Destino real creado dinámicamente.',
   };
 
+  // REGISTRO + DIBUJO DE NODOS:
+  // 1) Se agregan al estado global (grafo en memoria)
+  // 2) addNodeMarker() los dibuja inmediatamente en el mapa.
   state.nodes.push(nuevoOrigen, nuevoDestino);
   addNodeMarker(state, nuevoOrigen);
   addNodeMarker(state, nuevoDestino);
@@ -246,6 +267,7 @@ async function calculateAndDrawRealRoute(originLatLng, destLatLng, originName, d
     name: `${nuevoOrigen.name} - ${nuevoDestino.name}`,
   });
 
+  // Redibuja aristas para conectar el nuevo par de nodos y persiste estado.
   refreshMap(state);
   saveState(state);
 
@@ -254,10 +276,14 @@ async function calculateAndDrawRealRoute(originLatLng, destLatLng, originName, d
   bounds.extend(destLatLng);
   state.map.fitBounds(bounds);
 
-  const polylines = drawTransitLinesFromResults(
-    state,
-    rutasValidas.flatMap((item) => item.routeResults || []),
-  );
+  const routeResults = rutasValidas.flatMap((item) => item.routeResults || []);
+  const overlapInfo = detectOverlappingTransitSegments(routeResults);
+  const polylines = drawTransitLinesFromResults(state, routeResults);
+
+  const overlapNotice = overlapInfo.hasOverlap
+    ? `⚠ Líneas superpuestas: ${overlapInfo.overlapSegmentCount}`
+    : null;
+
   saveSearchToHistory(
     state,
     transitFns,
@@ -280,18 +306,26 @@ async function calculateAndDrawRealRoute(originLatLng, destLatLng, originName, d
             .filter(Boolean),
         ),
       ].join(' · ') || 'Sin línea específica',
+      overlapNotice,
       detailHtml: buildDetailedResultHtml(
         nuevoOrigen.name,
         nuevoDestino.name,
         mejorOpcion,
         rutasValidas,
+        overlapInfo,
       ),
     },
     updateRecommendationFromHistoryEntry,
   );
 
-  updateRecommendationPanel(mejorOpcion, mejorOpcion.leg, nuevoOrigen.name, nuevoDestino.name);
-  document.getElementById('node-info').innerHTML = buildDetailedResultHtml(nuevoOrigen.name, nuevoDestino.name, mejorOpcion, rutasValidas);
+  updateRecommendationPanel(mejorOpcion, mejorOpcion.leg, nuevoOrigen.name, nuevoDestino.name, overlapInfo);
+  document.getElementById('node-info').innerHTML = buildDetailedResultHtml(
+    nuevoOrigen.name,
+    nuevoDestino.name,
+    mejorOpcion,
+    rutasValidas,
+    overlapInfo,
+  );
 }
 
 function initCustomRouteAutocompletes() {

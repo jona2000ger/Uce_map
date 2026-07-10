@@ -54,6 +54,64 @@ export function clearDrawnTransitLines(state) {
   state.drawnTransitLines = [];
 }
 
+function normalizePoint(point) {
+  if (!point) return null;
+  const lat = typeof point.lat === 'function' ? point.lat() : point.lat;
+  const lng = typeof point.lng === 'function' ? point.lng() : point.lng;
+  if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
+    return null;
+  }
+  return { lat, lng };
+}
+
+function buildSegmentKey(a, b) {
+  const p1 = `${a.lat.toFixed(5)},${a.lng.toFixed(5)}`;
+  const p2 = `${b.lat.toFixed(5)},${b.lng.toFixed(5)}`;
+  return p1 < p2 ? `${p1}|${p2}` : `${p2}|${p1}`;
+}
+
+export function detectOverlappingTransitSegments(routeResults) {
+  if (!Array.isArray(routeResults) || routeResults.length === 0) {
+    return { hasOverlap: false, overlapSegmentCount: 0, maxOverlap: 1 };
+  }
+
+  const segmentCounter = new Map();
+
+  routeResults.forEach((route) => {
+    const leg = route?.legs?.[0];
+    if (!leg || !Array.isArray(leg.steps)) return;
+
+    leg.steps
+      .filter((step) => step.travel_mode === 'TRANSIT')
+      .forEach((step) => {
+        const path = Array.isArray(step.path)
+          ? step.path.map((point) => normalizePoint(point)).filter(Boolean)
+          : [];
+
+        for (let i = 0; i < path.length - 1; i += 1) {
+          const key = buildSegmentKey(path[i], path[i + 1]);
+          segmentCounter.set(key, (segmentCounter.get(key) || 0) + 1);
+        }
+      });
+  });
+
+  let overlapSegmentCount = 0;
+  let maxOverlap = 1;
+
+  segmentCounter.forEach((count) => {
+    if (count > 1) {
+      overlapSegmentCount += 1;
+      if (count > maxOverlap) maxOverlap = count;
+    }
+  });
+
+  return {
+    hasOverlap: overlapSegmentCount > 0,
+    overlapSegmentCount,
+    maxOverlap,
+  };
+}
+
 export function getSpeedColorByRank(index, total) {
   if (total <= 1) return '#00cc66';
   const ratio = index / (total - 1);
